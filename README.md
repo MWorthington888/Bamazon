@@ -12,3 +12,4 @@ iceCreamDBConnection.js (week 12-6) was used as a template to create a link to t
 greatBayBasic.js (week 12-10) was used as a template for inquiries, and reading/updating to the database. This activity also introduced  the 'console.table' module to make data displayed in the terminal window to be more aesthetically pleasing.
 
 Here is a short demo to watch the app in action.
+https://drive.google.com/file/d/1kK5_1FsdjrpOdoN0VWsNpctaY9BL0jSR/view

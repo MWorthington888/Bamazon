@@ -1,187 +1,141 @@
+// Modules that need to be installed prior to operation -----------------------------------
+const inquirer = require("inquirer");
 const mysql = require("mysql");
+const chalk = require("chalk");
+const conTable = require("console.table");
 
-
-var connection = mysql.createConnection({
-  host: "localhost",
-
-  // Your port; if not 3306
-  port: 3306,
-
-  // Your username
-  user: "root",
-
-  // Your password
-  password: "",
-  database: "ice_creamDB"
+// Connection verbage ------------------------------------------------------------------------
+const connection = mysql.createConnection({
+    host: "localhost",
+    port: 3306,
+    user: "Michael Worthington",
+    password: "gracieroot",
+    database: "bamazondb"
 });
 
-connection.connect(function(err) {
-  if (err) throw err;
-  console.log("connected as id " + connection.threadId);
-  connection.end();
-});
-
-
-var mysql = require("mysql");
-var inquirer = require("inquirer");
+// This gets the data from the database and sticks it into an array -----------------------------------
+function start(){
+    connection.query("SELECT * FROM products",function(error, result){
+        if (error) throw error;
+        const itemArr = [];
+        for(var i = 0; i < result.length; i++){
+            const saleObjects =
+            {
+                ID: chalk.blue(result[i].item_id),
+                Name: chalk.bold(result[i].product_name),
+                Dept: chalk.bold(result[i].department_name),
+                Price: chalk.green("$" + result[i].price.toFixed(2)),
+                Inventory: chalk.red(result[i].stock_quantity)
+            }
+            itemArr.push(saleObjects);
+        }
  
-// call once somewhere in the beginning of the app
-//https://www.npmjs.com/package/console.table
-const cTable = require('console.table');
+        // Console.table module borrowed from class activities 'Great Bay' Week 12.
+        // This module makes the data tables more aesthetically pleasing to view in terminal.
+        // This sections pushes database into terminal -----------------------------------------------------------
+        console.log("\n" + "\n" + "\n"+ "\n" + "\n" + "\n");
+        console.log("------------------------------------------------------------------------------------------------");
+        console.log(chalk.red("\n" + "WELCOME TO BLOODBATH AND BEYOND" + "\n"));
+        console.log(console.table(itemArr));
 
 
-// create the connection information for the sql database
-var connection = mysql.createConnection({
-  host: "localhost",
+        //This prompts user 2 questions: 1) What item to buy and 2) How many to buy? -------------------------------------
+        inquirer.prompt([
+            {
+                type: "input",
+                message: chalk.yellow("NerdFriend, what is the ID of the item you want to buy?"),
+                choices: function(value){
+                    if(isNaN(value) === false){
+                        return true;
+                    }
+                    return false;
+                },
+                name: "choiceID"
+            },
+            {
+                type: "input",
+                message: chalk.yellow("How many would you like to buy?"),
+                amount: function(value){
+                    if(isNaN(value) === false){
+                        return true;
+                    }
+                    return false;
+                },
+                name: "quantity"
+            }
 
-  // Your port; if not 3306
-  port: 3306,
 
-  // Your username
-  user: "root",
+        //This section checks number of items ordered versus number of items in inventory.
+        //If demand exceeds inventory, 'Insufficient Quantity' alert is thrown to terminal window.      
+        ]).then(function(response){
+            const numQuantity = parseInt(response.quantity);
+            connection.query(
+                "SELECT stock_quantity,price,product_name FROM products WHERE ?",
+                {
+                    item_id: response.choiceID
+                },
+                function(error, selected){
+                    if (error) throw error;
+                    const data = selected[0];
+                    if(numQuantity > data.stock_quantity){
+                        console.log(chalk.red("\n" + "INSUFFICIENT QUANTITY  -- PLEASE TRY AGAIN, OH GREAT NERF HERDER!" + "\n"));
+                        anotherTransaction();
+                        
+                        
+                    }else{
+                        updateQuantity(response.choiceID, numQuantity,
+                        data.stock_quantity, data.price, data.product_name);
+                    }
+                })
+        });
+    });
+    
+}
+    
 
-  // Your password
-  password: "",
-  database: "greatBay_DB"
-});
+// This section updates inventory in database ------------------------------------------------------------------
+function updateQuantity(userChoiceId, userQuantity, 
+    stockQuan, itemPrice, item_Name){
+    const updateQuantity = stockQuan - userQuantity;
+    connection.query("UPDATE products SET ? WHERE ?",
+        [
+            {
+                stock_quantity: updateQuantity
+            },
+            {
+                item_id: userChoiceId
+            }
+        // This section totals transaction amount and alerts user to item they purchased and amount they owe ------------
+        ],function(error){
+            if(error) throw error;
 
-// connect to the mysql server and sql database
-connection.connect(function(err) {
-  if (err) throw err;
-  // run the start function after the connection is made to prompt the user
-  start();
-});
+            const total = parseFloat(itemPrice) * userQuantity;
+           
+            console.log("\n" + (chalk.bold("You bought " + (userQuantity) + " " + (item_Name)
+                + " for a total cost of " )) + (chalk.green("$" +total.toFixed(2))) + "\n");
+           
+            anotherTransaction();
+        })
+}
 
-// function which prompts the user for what action they should take
-function start() {
-  inquirer
-    .prompt({
-      name: "postOrBid",
-      type: "rawlist",
-      message: "Would you like to [POST] an auction or [BID] on an auction?",
-      choices: ["POST", "BID"]
+// Section that prompts user one question: 1) Buy another item? -----------------------------------------
+function anotherTransaction(){
+    inquirer.prompt([
+        {
+            type: "list",
+            choices: ["Aye, gentle shopkeep.","Nay! A pox on thee!"],
+            message: "Would you like to buy another item?",
+            name: "again"
+        }
+    ]).then(function(response){
+        if(response.again === "Aye, gentle shopkeep."){
+            start();
+        }else{
+            console.log("\n" + "Thanks for your patronage, Nerd of Nerds!");
+
+            // Important to end the connection so the program doesn't run continuously 
+            connection.end();
+        }
     })
-    .then(function(answer) {
-      // based on their answer, either call the bid or the post functions
-      if (answer.postOrBid.toUpperCase() === "POST") {
-        postAuction();
-      }
-      else {
-        bidAuction();
-      }
-    });
 }
-
-// function to handle posting new items up for auction
-function postAuction() {
-  // prompt for info about the item being put up for auction
-  inquirer
-    .prompt([
-      {
-        name: "item",
-        type: "input",
-        message: "What is the item you would like to submit?"
-      },
-      {
-        name: "category",
-        type: "input",
-        message: "What category would you like to place your auction in?"
-      },
-      {
-        name: "startingBid",
-        type: "input",
-        message: "What would you like your starting bid to be?",
-        validate: function(value) {
-          if (isNaN(value) === false) {
-            return true;
-          }
-          return false;
-        }
-      }
-    ])
-    .then(function(answer) {
-      // when finished prompting, insert a new item into the db with that info
-      connection.query(
-        "INSERT INTO auctions SET ?",
-        {
-          item_name: answer.item,
-          category: answer.category,
-          starting_bid: answer.startingBid,
-          highest_bid: answer.startingBid
-        },
-        function(err) {
-          if (err) throw err;
-          console.log("Your auction was created successfully!");
-          // re-prompt the user for if they want to bid or post
-          start();
-        }
-      );
-    });
-}
-
-function bidAuction() {
-  // query the database for all items being auctioned
-  connection.query("SELECT * FROM auctions", function(err, results) {
-    if (err) throw err;
-   
-    //results of the sql select statement
-   console.table(results);
-   
-    // once you have the items, prompt the user for which they'd like to bid on
-    inquirer
-      .prompt([
-        {
-          name: "choice",
-          type: "rawlist",
-          choices: function() {
-            var choiceArray = [];
-            for (var i = 0; i < results.length; i++) {
-              choiceArray.push(results[i].item_name);
-            }
-            return choiceArray;
-          },
-          message: "What auction would you like to place a bid in?"
-        },
-        {
-          name: "bid",
-          type: "input",
-          message: "How much would you like to bid?"
-        }
-      ])
-      .then(function(answer) {
-        // get the information of the chosen item
-        var chosenItem;
-        for (var i = 0; i < results.length; i++) {
-          if (results[i].item_name === answer.choice) {
-            chosenItem = results[i];
-          }
-        }
-
-        // determine if bid was high enough
-        if (chosenItem.highest_bid < parseInt(answer.bid)) {
-          // bid was high enough, so update db, let the user know, and start over
-          connection.query(
-            "UPDATE auctions SET ? WHERE ?",
-            [
-              {
-                highest_bid: answer.bid
-              },
-              {
-                id: chosenItem.id
-              }
-            ],
-            function(error) {
-              if (error) throw err;
-              console.log("Bid placed successfully!");
-              start();
-            }
-          );
-        }
-        else {
-          // bid wasn't high enough, so apologize and start over
-          console.log("Your bid was too low. Try again...");
-          start();
-        }
-      });
-  });
-}
+start();
